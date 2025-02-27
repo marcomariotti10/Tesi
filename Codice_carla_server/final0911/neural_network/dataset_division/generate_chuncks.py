@@ -123,7 +123,7 @@ if __name__ == '__main__':
     for i in range(number_of_chuncks): #type: ignore
         
         complete_grid_maps = []
-        complete_grid_maps_BB = []
+        complete_vertices = []
         complete_numb_BB = []
 
         print(f"\nChunck number {i+1} of {number_of_chuncks}")
@@ -139,53 +139,54 @@ if __name__ == '__main__':
 
         with ThreadPoolExecutor(max_workers=3) as executor:
             futures = []
-            futures.append(executor.submit(process_lidar_chunk, LIDAR_1_GRID_DIRECTORY, POSITION_LIDAR_1_GRID_NO_BB, files_lidar_chunck_1, files_BB_chunck_1, complete_grid_maps, complete_grid_maps_BB, complete_numb_BB, False))
-            futures.append(executor.submit(process_lidar_chunk, LIDAR_2_GRID_DIRECTORY, POSITION_LIDAR_2_GRID_NO_BB, files_lidar_chunck_2, files_BB_chunck_2, complete_grid_maps, complete_grid_maps_BB, complete_numb_BB, False))
-            futures.append(executor.submit(process_lidar_chunk, LIDAR_3_GRID_DIRECTORY, POSITION_LIDAR_3_GRID_NO_BB, files_lidar_chunck_3, files_BB_chunck_3, complete_grid_maps, complete_grid_maps_BB, complete_numb_BB, False))
+            futures.append(executor.submit(process_lidar_chunk, LIDAR_1_GRID_DIRECTORY, POSITION_LIDAR_1_GRID_NO_BB, files_lidar_chunck_1, files_BB_chunck_1, complete_grid_maps, complete_vertices, complete_numb_BB, False))
+            futures.append(executor.submit(process_lidar_chunk, LIDAR_2_GRID_DIRECTORY, POSITION_LIDAR_2_GRID_NO_BB, files_lidar_chunck_2, files_BB_chunck_2, complete_grid_maps, complete_vertices, complete_numb_BB, False))
+            futures.append(executor.submit(process_lidar_chunk, LIDAR_3_GRID_DIRECTORY, POSITION_LIDAR_3_GRID_NO_BB, files_lidar_chunck_3, files_BB_chunck_3, complete_grid_maps, complete_vertices, complete_numb_BB, False))
 
             for future in futures:
-                complete_grid_maps, complete_grid_maps_BB = future.result()
+                complete_grid_maps, complete_vertices = future.result()
 
         # Concatenate the lists in complete_grid_maps along the first dimension
         complete_grid_maps = np.array(complete_grid_maps)
         print(f"\ncomplete grid map shape : {complete_grid_maps.shape}")
 
         # Concatenate the lists in complete_grid_maps_BB along the first dimension
-        complete_grid_maps_BB = np.array(complete_grid_maps_BB)
-        print(f"complete grid map BB shape : {complete_grid_maps_BB.shape}")
+        complete_vertices = np.array(complete_vertices)
+        print(f"complete grid map BB shape : {complete_vertices.shape}")
 
         complete_grid_maps = scaler_X.transform(complete_grid_maps.reshape(-1, complete_grid_maps.shape[-1])).reshape(complete_grid_maps.shape)
 
         # IF YOU DON'T PERFORM AUGMENTATION, YOU NEED TO PERFORM THE FOLLOWING INSTRUCTIONS
 
-        '''
         indices = np.arange(complete_grid_maps.shape[0])
         np.random.shuffle(indices)
         complete_grid_maps = complete_grid_maps[indices]
-        complete_grid_maps_BB = complete_grid_maps_BB[indices]
+        complete_vertices = complete_vertices[indices]
+
+        complete_grid_maps = np.expand_dims(complete_grid_maps, axis=1)
+        complete_vertices = np.expand_dims(complete_vertices, axis=1)
+
+        print("shape after expand_dims: ", complete_grid_maps.shape, complete_vertices.shape)
+
+        '''
 
         # Split the data
         split_index = math.ceil(len(complete_grid_maps) * 0.9)
         X_val = complete_grid_maps[split_index:]
         complete_grid_maps = complete_grid_maps[:split_index]
-        y_val = complete_grid_maps_BB[split_index:]
-        complete_grid_maps_BB = complete_grid_maps_BB[:split_index]
-
-        complete_grid_maps = np.expand_dims(complete_grid_maps, axis=1)
-        complete_grid_maps_BB = np.expand_dims(complete_grid_maps_BB, axis=1)
-
-        print("shape after expand_dims: ", complete_grid_maps.shape, complete_grid_maps_BB.shape)
+        y_val = complete_vertices[split_index:]
+        complete_vertices = complete_vertices[:split_index]
 
         # Save the arrays
         np.save(os.path.join(CHUNCKS_DIR, f'complete_grid_maps_train_{i}.npy'), complete_grid_maps)
         print(f"complete grid map train {i} saved")
-        np.save(os.path.join(CHUNCKS_DIR, f'complete_grid_maps_BB_train_{i}.npy'), complete_grid_maps_BB)
-        print(f"complete grid map BB train {i} saved")
+        np.save(os.path.join(CHUNCKS_DIR, f'complete_vertices_train_{i}.npy'), complete_vertices)
+        print(f"complete vertices BB train {i} saved")
 
         np.save(os.path.join(CHUNCKS_DIR, f'complete_grid_maps_val_{i}.npy'), X_val)
         print(f"complete grid map train {i} saved")
-        np.save(os.path.join(CHUNCKS_DIR, f'complete_grid_maps_BB_val_{i}.npy'), y_val)
-        print(f"complete grid map BB train {i} saved")
+        np.save(os.path.join(CHUNCKS_DIR, f'complete_vertices_val_{i}.npy'), y_val)
+        print(f"complete vertices BB train {i} saved")
 
         
         '''
@@ -193,7 +194,7 @@ if __name__ == '__main__':
         # Save the arrays
         np.save(os.path.join(CHUNCKS_DIR, f'complete_grid_maps_{i}.npy'), complete_grid_maps)
         print(f"complete grid map {i} saved")
-        np.save(os.path.join(CHUNCKS_DIR, f'complete_grid_maps_BB_{i}.npy'), complete_grid_maps_BB)
+        np.save(os.path.join(CHUNCKS_DIR, f'complete_grid_maps_BB_{i}.npy'), complete_vertices)
         print(f"complete grid map BB {i} saved")
 
         
@@ -256,7 +257,7 @@ if __name__ == '__main__':
     for i in range (number_of_chuncks_test):
 
         complete_grid_maps = []
-        complete_grid_maps_BB = []
+        complete_vertices = []
         complete_numb_BB = []
 
         files_lidar_chunck_1 = files_lidar_1[ i*file_for_chunck1 : min( (i+1)*file_for_chunck1, len(files_lidar_1) ) ] #type: ignore
@@ -270,30 +271,30 @@ if __name__ == '__main__':
 
         with ThreadPoolExecutor(max_workers=3) as executor:
             futures = []
-            futures.append(executor.submit(process_lidar_chunk, LIDAR_1_TEST, POSITION_1_TEST, files_lidar_chunck_1, files_BB_chunck_1, complete_grid_maps, complete_grid_maps_BB, complete_numb_BB, False)) # type: ignore
-            futures.append(executor.submit(process_lidar_chunk, LIDAR_2_TEST, POSITION_2_TEST, files_lidar_chunck_2, files_BB_chunck_2, complete_grid_maps, complete_grid_maps_BB, complete_numb_BB, False)) # type: ignore
-            futures.append(executor.submit(process_lidar_chunk, LIDAR_3_TEST, POSITION_3_TEST, files_lidar_chunck_3, files_BB_chunck_3, complete_grid_maps, complete_grid_maps_BB, complete_numb_BB, False)) # type: ignore
+            futures.append(executor.submit(process_lidar_chunk, LIDAR_1_TEST, POSITION_1_TEST, files_lidar_chunck_1, files_BB_chunck_1, complete_grid_maps, complete_vertices, complete_numb_BB, False)) # type: ignore
+            futures.append(executor.submit(process_lidar_chunk, LIDAR_2_TEST, POSITION_2_TEST, files_lidar_chunck_2, files_BB_chunck_2, complete_grid_maps, complete_vertices, complete_numb_BB, False)) # type: ignore
+            futures.append(executor.submit(process_lidar_chunk, LIDAR_3_TEST, POSITION_3_TEST, files_lidar_chunck_3, files_BB_chunck_3, complete_grid_maps, complete_vertices, complete_numb_BB, False)) # type: ignore
             
             for future in futures:
-                complete_grid_maps, complete_grid_maps_BB = future.result()
+                complete_grid_maps, complete_vertices = future.result()
 
         # Concatenate the lists in complete_grid_maps along the first dimension
         complete_grid_maps = np.array(complete_grid_maps)
         print(f"complete grid map shape : {complete_grid_maps.shape}")
 
         # Concatenate the lists in complete_grid_maps_BB along the first dimension
-        complete_grid_maps_BB = np.array(complete_grid_maps_BB)
-        print(f"complete grid map BB shape : {complete_grid_maps_BB.shape}")
+        complete_vertices = np.array(complete_vertices)
+        print(f"complete grid map BB shape : {complete_vertices.shape}")
 
         # Normalize the data
         complete_grid_maps = scaler_X.transform(complete_grid_maps.reshape(-1, complete_grid_maps.shape[-1])).reshape(complete_grid_maps.shape)
         
         complete_grid_maps = np.expand_dims(complete_grid_maps, axis=1)
-        complete_grid_maps_BB = np.expand_dims(complete_grid_maps_BB, axis=1)
+        complete_vertices = np.expand_dims(complete_vertices, axis=1)
 
         # Save the arrays
         np.save(os.path.join(CHUNCKS_DIR, f'complete_grid_maps_test_{i}.npy'), complete_grid_maps)
         print(f"complete grid map test {i} saved")
-        np.save(os.path.join(CHUNCKS_DIR, f'complete_grid_maps_BB_test_{i}.npy'), complete_grid_maps_BB)
-        print(f"complete grid map BB test {i} saved")
+        np.save(os.path.join(CHUNCKS_DIR, f'complete_vertices_test_{i}.npy'), complete_vertices)
+        print(f"complete vertices test {i} saved")
     

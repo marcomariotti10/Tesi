@@ -40,9 +40,9 @@ def load_dataset(name,i,device):
     name_train = f"dataset_{name}{i}.beton"  # Define the path where the dataset will be written
     complete_path_train = os.path.join(FFCV_DIR, name_train)
 
-    train_loader = Loader(complete_path_train, batch_size=32,
+    train_loader = Loader(complete_path_train, batch_size=64,
     num_workers=8, order=OrderOption.QUASI_RANDOM,
-    os_cache=False,
+    os_cache=True,
     pipelines={
         'covariate': [NDArrayDecoder(),    # Decodes raw NumPy arrays                    
                     ToTensor(),          # Converts to PyTorch Tensor (1,400,400)
@@ -61,12 +61,12 @@ if __name__ == "__main__":
     random.seed(SEED)
 
     # Model creation
-    model = Autoencoder()
-    model.apply(weights_init)
-    criterion = WeightedCustomLoss()
+    model = MapToBBModel()
+    model.apply(initialize_weights)
+    criterion = HungarianMSELoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=5)
-    early_stopping = EarlyStopping(patience=5, min_delta=0.0001)
+    early_stopping = EarlyStopping(patience=20, min_delta=0.0001)
 
     # Check if CUDA is available
     print(f"Is CUDA supported by this system? {torch.cuda.is_available()}")
@@ -96,8 +96,8 @@ if __name__ == "__main__":
     # Parameters for training
     early_stopping_triggered = False
     number_of_chucks= NUMBER_OF_CHUNCKS
-    num_total_epochs = 2
-    num_epochs_for_each_chunck = 5
+    num_total_epochs = 1
+    num_epochs_for_each_chunck = 500
     number_of_chucks_testset = NUMBER_OF_CHUNCKS_TEST
 
     for j in range(num_total_epochs):
@@ -114,9 +114,6 @@ if __name__ == "__main__":
                 break
             
             print(f"\nChunck number {i+1} of {number_of_chucks}")
-
-            name_train = f"dataset_train{i}.beton"  # Define the path where the dataset will be written
-            complete_path_train = os.path.join(FFCV_DIR, name_train)
 
             with ThreadPoolExecutor(max_workers=2) as executor:
                 train_loader, val_loader = executor.map(load_dataset, ['train', 'val'], [i, i], [device, device])
@@ -171,9 +168,6 @@ if __name__ == "__main__":
     for i in range(number_of_chucks_testset): #type: ignore
 
         print(f"\nTest chunck number {i+1} of {number_of_chucks_testset}: ")
-
-        name_test = f"dataset_test{i}.beton"  # Define the path where the dataset will be written
-        complete_path_train = os.path.join(FFCV_DIR, name_test)
 
         test_loader = load_dataset('test', i, device)
 

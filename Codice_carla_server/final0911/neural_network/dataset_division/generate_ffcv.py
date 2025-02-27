@@ -11,11 +11,11 @@ class DatasetNPY(torch.utils.data.Dataset):
         with ThreadPoolExecutor(max_workers=2) as executor:
             self.X , self.Y = executor.map(load_array, [
             os.path.join(CHUNCKS_DIR, f'complete_grid_maps_{name}_{i}.npy'),
-            os.path.join(CHUNCKS_DIR, f'complete_grid_maps_BB_{name}_{i}.npy')
+            os.path.join(CHUNCKS_DIR, f'complete_vertices_{name}_{i}.npy')
         ])
 
     def __getitem__(self, idx):
-        return (self.X[idx].astype('float32'), self.Y[idx].astype('int'))
+        return (self.X[idx].astype('float32'), self.Y[idx].astype('float32'))
 
     def __len__(self):
         return len(self.X)
@@ -29,15 +29,13 @@ def load_dataset(name, i):
     complete_path = os.path.join(FFCV_DIR, new_name)
 
     writer = DatasetWriter(complete_path, {
-            'covariate': NDArrayField(shape=shape, dtype=np.dtype('float32')),  # Adjust shape
-            'label': NDArrayField(shape=shape, dtype=np.dtype('int')),
+            'covariate': NDArrayField(shape=shape_X, dtype=np.dtype('float32')),  # Adjust shape
+            'label': NDArrayField(shape=shape_y, dtype=np.dtype('float32'))  # Adjust shape,
         }, num_workers=16)
 
     writer.from_indexed_dataset(dataset)
 
 if __name__ == '__main__':
-
-    shape = (1,400, 400)  # Shape of each sample
 
     # Get the parent directory (one level up from the current script's directory)
     parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -47,6 +45,9 @@ if __name__ == '__main__':
 
     from functions_for_NN import *
     from constants import *
+
+    shape_X = (1,400, 400)  # Shape of each sample
+    shape_y = (1,MAX_NUMBER_OF_BB,4,2)
     
     os.makedirs(FFCV_DIR, exist_ok=True)
 

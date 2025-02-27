@@ -61,6 +61,8 @@ if __name__ == '__main__':
                 os.path.join(chunck_dir, f'complete_grid_maps_BB_{i}.npy')
             ])
 
+        '''
+
         # Number of random samples you want to take
         num_samples = int(complete_grid_maps.shape[0] * 0.2)
 
@@ -101,6 +103,8 @@ if __name__ == '__main__':
 
         print("shape after expand_dims: ", complete_grid_maps.shape, complete_grid_maps_BB.shape)
 
+        '''
+
         # Split the data
         split_index = math.ceil(len(complete_grid_maps) * 0.9)
         X_val = complete_grid_maps[split_index:]
@@ -112,13 +116,14 @@ if __name__ == '__main__':
         # Save the arrays
         np.save(os.path.join(CHUNCKS_DIR, f'complete_grid_maps_train_{i}.npy'), complete_grid_maps)
         print(f"complete grid map train {i} saved")
-        np.save(os.path.join(CHUNCKS_DIR, f'complete_grid_maps_BB_train_{i}.npy'), complete_grid_maps_BB)
-        print(f"complete grid map BB train {i} saved")
+        np.save(os.path.join(CHUNCKS_DIR, f'complete_vertices_train_{i}.npy'), complete_grid_maps_BB)
+        print(f"complete vertices BB train {i} saved")
 
         np.save(os.path.join(CHUNCKS_DIR, f'complete_grid_maps_val_{i}.npy'), X_val)
         print(f"complete grid map train {i} saved")
-        np.save(os.path.join(CHUNCKS_DIR, f'complete_grid_maps_BB_val_{i}.npy'), y_val)
-        print(f"complete grid map BB train {i} saved")
+        np.save(os.path.join(CHUNCKS_DIR, f'complete_vertices_val_{i}.npy'), y_val)
+        print(f"complete vertices BB train {i} saved")
+
 
         os.remove(os.path.join(CHUNCKS_DIR, f'complete_grid_maps_{i}.npy'))
         os.remove(os.path.join(CHUNCKS_DIR, f'complete_grid_maps_BB_{i}.npy'))

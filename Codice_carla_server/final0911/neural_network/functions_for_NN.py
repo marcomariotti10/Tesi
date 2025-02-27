@@ -22,7 +22,8 @@ import open3d as o3d
 import matplotlib.pyplot as plt
 import cv2
 import gc
-from multiprocessing import Pool
+import torch.nn.functional as F
+from scipy.optimize import linear_sum_assignment
 from sklearn.preprocessing import MinMaxScaler
 from constants import *
 
@@ -57,13 +58,13 @@ def load_points_grid_map_BB (csv_file):
         
         for row in reader:
             # Extract the 3D coordinates of the 8 bounding box vertices
-            coordinates = [ [ float(row[i]), float(row[i+1]), float(row[i+2]) ] for i in range(2, 12, 3)]
+            coordinates = [ [ float(row[i]), float(row[i+1]) ] for i in range(2, 12, 3)]
             points.append(coordinates)
 
     np_points = np.array(points)
     return np_points
 
-def generate_combined_grid_maps(grid_map_path, grid_map_BB_path, grid_map_files, grid_map_BB_files, complete_grid_maps, complete_grid_maps_BB, complete_num_BB, bool_value):
+def generate_combined_grid_maps(grid_map_path, grid_map_BB_path, grid_map_files, grid_map_BB_files, complete_grid_maps, complete_vertices, complete_num_BB, bool_value):
     for file, file_BB in zip(grid_map_files, grid_map_BB_files):
         complete_path = os.path.join(grid_map_path, file)
         complete_path_BB = os.path.join(grid_map_BB_path, file_BB)
@@ -73,21 +74,28 @@ def generate_combined_grid_maps(grid_map_path, grid_map_BB_path, grid_map_files,
         points_BB = load_points_grid_map_BB(complete_path_BB)
 
         grid_map_recreate = np.full((Y_RANGE, X_RANGE), FLOOR_HEIGHT, dtype=float) # type: ignore
-        grid_map_recreate_BB = np.full((Y_RANGE, X_RANGE), 0, dtype=float) # type: ignore
 
         cols, rows, heights = points.T
         grid_map_recreate[rows.astype(int), cols.astype(int)] = heights.astype(float)
 
-        for i in range(len(points_BB)):
-            vertices = np.array(points_BB[i])
-            height_BB = 1  # Assuming all vertices have the same height
-            fill_polygon(grid_map_recreate_BB, vertices, height_BB)
-        
+        vertices = np.array(points_BB)
+
+        vertices = vertices / 399
+
+        # Ensure all arrays have shape (MAX_NUMBER_OF_BB, 4, 2)
+        if vertices.shape[0] == 0:
+            vertices = np.zeros((MAX_NUMBER_OF_BB, 4, 2))
+        elif vertices.shape[0] < MAX_NUMBER_OF_BB:
+            padding = np.zeros((MAX_NUMBER_OF_BB - vertices.shape[0], 4, 2))
+            vertices = np.concatenate((vertices, padding), axis=0)
+
         if bool_value:
             num_BB = [0,0,0]
             with open(complete_path_BB, 'r') as file:
                 reader = csv.reader(file)
                 next(reader)  # Skip header
+                if len(list(reader)) > 5:
+                    print("Error: more than 5 BBs in the same grid map")
                 for row in reader:
                     if row[1] == 'pedestrian':
                         num_BB[0] += 1
@@ -97,11 +105,11 @@ def generate_combined_grid_maps(grid_map_path, grid_map_BB_path, grid_map_files,
                         num_BB[2] += 1
 
             complete_grid_maps.append(grid_map_recreate)
-            complete_grid_maps_BB.append(grid_map_recreate_BB)
+            complete_vertices.append(vertices)
             complete_num_BB.append(num_BB)
         else:
             complete_grid_maps.append(grid_map_recreate)
-            complete_grid_maps_BB.append(grid_map_recreate_BB)
+            complete_vertices.append(vertices)
 
 def fill_polygon(grid_map, vertices, height):
     # Create an empty mask with the same shape as the grid map
@@ -133,6 +141,19 @@ def weights_init(m):
         init.kaiming_normal_(m.weight, nonlinearity='relu')
         if m.bias is not None:
             init.constant_(m.bias, 0)
+
+def initialize_weights(m):
+    if isinstance(m, nn.Conv2d):
+        nn.init.kaiming_normal_(m.weight, nonlinearity='relu')
+        if m.bias is not None:
+            nn.init.constant_(m.bias, 0)
+    elif isinstance(m, nn.Linear):
+        nn.init.kaiming_normal_(m.weight, nonlinearity='relu')
+        if m.bias is not None:
+            nn.init.constant_(m.bias, 0)
+    elif isinstance(m, nn.BatchNorm2d):
+        nn.init.constant_(m.weight, 1)
+        nn.init.constant_(m.bias, 0)
 
 def visualize_prediction(prediction, real):
     """
@@ -303,38 +324,33 @@ def apply_augmentation(grid_maps, grid_maps_BB):
 
 def load_array(file_path):
     return np.load(file_path)
-
-# Define the autoencoder model
-class Autoencoder(nn.Module):
-    def __init__(self): # Constructor method for the autoencoder
-        super(Autoencoder, self).__init__() # Calls the constructor of the parent class (nn.Module) to set up necessary functionality.
+    
+class MapToBBModel(nn.Module):
+    def __init__(self):
+        super(MapToBBModel, self).__init__()
         self.encoder = nn.Sequential(
-            nn.Conv2d(1, 32, kernel_size=3, padding=1),
+            nn.Conv2d(1, 8, kernel_size=3, padding=1),
             nn.ReLU(),
-            nn.MaxPool2d(2, stride = 2),
+            nn.MaxPool2d(2, stride=2),
+            nn.Conv2d(8, 16, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2, stride=2),
+            nn.Conv2d(16, 32, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2, stride=2),
             nn.Conv2d(32, 64, kernel_size=3, padding=1),
             nn.ReLU(),
-            nn.MaxPool2d(2, stride = 2),
-            nn.Conv2d(64, 128, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(2, stride = 2)
+            nn.MaxPool2d(2, stride=2),
+            nn.Flatten()
         )
-        self.decoder = nn.Sequential(
-            nn.Conv2d(128, 128, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.Upsample(scale_factor=2),
-            nn.Conv2d(128, 64, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.Upsample(scale_factor=2),
-            nn.Conv2d(64, 32, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.Upsample(scale_factor=2),
-            nn.Conv2d(32, 1, kernel_size=3, padding=1),
+        self.fc = nn.Sequential(
+            nn.Linear(64*25*25, MAX_NUMBER_OF_BB*4*2)
         )
 
-    def forward(self, x): # The forward method defines the computation that happens when the model is called with input x.
+    def forward(self, x):
         x = self.encoder(x)
-        x = self.decoder(x)
+        x = self.fc(x)
+        x = x.view(-1, 1, MAX_NUMBER_OF_BB, 4, 2)  # Reshape to the desired output shape
         return x
 
 class EarlyStopping:
@@ -356,22 +372,35 @@ class EarlyStopping:
             if self.counter >= self.patience:
                 self.early_stop = True
 
-class WeightedCustomLoss(nn.Module):
-    def __init__(self, weight=100):
-        super(WeightedCustomLoss, self).__init__()
-        self.mse_loss = nn.MSELoss()
-        self.weight = weight
+class HungarianMSELoss(nn.Module):
+    def __init__(self):
+        super(HungarianMSELoss, self).__init__()
 
-    def forward(self, predictions, targets):
-        from constants import FLOOR_HEIGHT
-        mask = (targets != FLOOR_HEIGHT).float()
-        masked_predictions = predictions * mask
-        masked_targets = targets * mask
-        loss = self.mse_loss(masked_predictions, masked_targets)
-        
-        # Apply weighting to the loss
-        weighted_loss = loss * self.weight + self.mse_loss(predictions * (1 - mask), targets * (1 - mask))
-        return weighted_loss
+    def forward(self, pred, target):
+        batch_size = pred.size(0)
+        total_loss = 0.0
+
+        for i in range(batch_size):
+            pred_points = pred[i].view(-1, 2).float()  
+            target_points = target[i].view(-1, 2).float()  
+
+            #print(f"pred_points: {pred_points.shape}")
+            #print(f"target_points: {target_points.shape}")
+
+            # Compute the pairwise distance matrix
+            dist_matrix = torch.cdist(pred_points, target_points, p=2)  
+
+            # Solve the linear sum assignment problem (Hungarian algorithm)
+            row_ind, col_ind = linear_sum_assignment(dist_matrix.cpu().detach().numpy())
+
+            # Compute the loss for the optimal assignment
+            optimal_pred_points = pred_points[row_ind]
+            optimal_target_points = target_points[col_ind]
+            loss = F.mse_loss(optimal_pred_points, optimal_target_points)
+
+            total_loss += loss
+
+        return (total_loss / batch_size)
     
 class LidarDataset(torch.utils.data.Dataset):
     def __init__(self, grid_maps_dir, grid_maps_bb_dir, chunk_index):
