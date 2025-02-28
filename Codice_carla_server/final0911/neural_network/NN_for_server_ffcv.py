@@ -38,9 +38,11 @@ from ffcv.reader import Reader
 def load_dataset(name,i,device):
     
     name_train = f"dataset_{name}{i}.beton"  # Define the path where the dataset will be written
-    complete_path_train = os.path.join(FFCV_DIR, name_train)
+    complete_name_chunck_path = os.path.join(FFCV_DIR, f'{NUMBER_OF_CHUNCKS}_{NUMBER_OF_CHUNCKS_TEST}')
 
-    train_loader = Loader(complete_path_train, batch_size=64,
+    complete_path_train = os.path.join(complete_name_chunck_path, name_train)
+
+    train_loader = Loader(complete_path_train, batch_size=32,
     num_workers=8, order=OrderOption.QUASI_RANDOM,
     os_cache=True,
     pipelines={
@@ -96,8 +98,8 @@ if __name__ == "__main__":
     # Parameters for training
     early_stopping_triggered = False
     number_of_chucks= NUMBER_OF_CHUNCKS
-    num_total_epochs = 1
-    num_epochs_for_each_chunck = 500
+    num_total_epochs = 50
+    num_epochs_for_each_chunck = 3
     number_of_chucks_testset = NUMBER_OF_CHUNCKS_TEST
 
     for j in range(num_total_epochs):
@@ -149,11 +151,14 @@ if __name__ == "__main__":
                 scheduler.step(val_loss)
                 print(f'Epoch {epoch+1}/{num_epochs_for_each_chunck}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}')
 
-                early_stopping(val_loss)
-                if early_stopping.early_stop:
-                    print("Early stopping triggered")
-                    early_stopping_triggered = True
-                    break
+                if j >= 2:
+                    early_stopping(val_loss)
+                    if early_stopping.early_stop:
+                        print("Early stopping triggered")
+                        early_stopping_triggered = True
+                        break
+                else:
+                    print("Too early to trigger early stopping")
                 print(f"Time to move data to GPU: {datetime.now() - start}")
 
     print("\n-------------------------------------------")
@@ -200,4 +205,4 @@ if __name__ == "__main__":
     model_name = f'model_{time}_loss_{total_loss:.4f}.pth'
     model_save_path = os.path.join(MODEL_DIR, model_name)
     torch.save(model.state_dict(), model_save_path)
-    print(f'Model saved')
+    print(f'Model saved: {model_name}')

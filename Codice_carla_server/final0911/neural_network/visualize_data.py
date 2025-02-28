@@ -37,15 +37,7 @@ def visualize_data(loader):
         print(f"Labels shape: {labels.shape}")
 
         for i in range(min(20, len(images))):  # Visualize first 5 images
-            grid_map_recreate_BB = np.full((Y_RANGE, X_RANGE), 0, dtype=float) # type: ignore
-            points_BB = labels[i].squeeze()
-            print(f"Points: {points_BB.shape}")
-            for k in range(len(points_BB)):
-                vertices = np.array(points_BB[k]) * 399
-                print(f"Vertices: {vertices.shape}")
-                print(f"Vertices: {vertices}")
-                height_BB = 1  # Assuming all vertices have the same height
-                fill_polygon(grid_map_recreate_BB, vertices, height_BB)
+            
             
             fig, ax = plt.subplots(figsize=(10, 10))
             ax.imshow(images[i].squeeze(), cmap='gray', alpha=0.5)

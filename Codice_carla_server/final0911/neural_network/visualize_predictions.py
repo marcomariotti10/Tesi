@@ -12,27 +12,14 @@ from torch.utils.data import DataLoader, TensorDataset
 from functions_for_NN import *
 from constants import *
 
-def visualize_prediction(prediction, ground_truth):
-    fig, ax = plt.subplots(1, 2, figsize=(10, 5))
-    
-    # Reshape the prediction and ground truth if necessary
-    if prediction.ndim == 1:
-        prediction = prediction.reshape((20, 20))  # Adjust the shape as needed
-    if ground_truth.ndim == 1:
-        ground_truth = ground_truth.reshape((20, 20))  # Adjust the shape as needed
 
-    ax[0].imshow(prediction, cmap='gray')
-    ax[0].set_title('Prediction')
-    ax[1].imshow(ground_truth, cmap='gray')
-    ax[1].set_title('Ground Truth')
-    plt.show()
-
-def load_dataset(name,i,device):
+def load_dataset(name,i,device, batch):
     
     name_train = f"dataset_{name}{i}.beton"  # Define the path where the dataset will be written
-    complete_path_train = os.path.join(FFCV_DIR, name_train)
+    complete_name_ffcv_path = os.path.join(FFCV_DIR, f'{NUMBER_OF_CHUNCKS}_{NUMBER_OF_CHUNCKS_TEST}')
+    complete_path_train = os.path.join(complete_name_ffcv_path, name_train)
 
-    train_loader = Loader(complete_path_train, batch_size=64,
+    train_loader = Loader(complete_path_train, batch_size=batch,
     num_workers=8, order=OrderOption.QUASI_RANDOM,
     os_cache=True,
     pipelines={
@@ -46,13 +33,34 @@ def load_dataset(name,i,device):
 
     return train_loader
 
+def visualize_prediction(pred, gt, map):
+    """
+    Visualize the grid map and the prediction.
+    
+    Parameters:
+    - grid_map: numpy array of shape (400, 400)
+    - prediction: numpy array of shape (400, 400)
+    """
+    fig, ax = plt.subplots(1, 2, figsize=(10, 10))
+    ax[0].imshow(map, cmap='gray', alpha=0.5)
+    ax[0].imshow(pred, cmap='jet', alpha=0.5)
+    ax[0].set_title('Overlay of Original and Prediction Grid Maps')
+
+    ax[1].imshow(map, cmap='gray', alpha=0.5)
+    ax[1].imshow(gt, cmap='jet', alpha=0.5)
+    ax[1].set_title('Overlay of Original and Ground Truth Grid Maps')
+    plt.show()
+    
+    plt.show()
+
+
 if __name__ == '__main__':
 
-    number_of_chucks_testset = 1
+    number_of_chucks_testset = NUMBER_OF_CHUNCKS_TEST
 
     # Load model
     model_path = MODEL_DIR
-    model_name = 'model_20250227_123854_loss_0.0253'
+    model_name = 'model_20250228_170939_loss_0.0241'
     model_name = model_name + '.pth'
     model_path = os.path.join(model_path, model_name)
     model = MapToBBModel()
@@ -86,48 +94,61 @@ if __name__ == '__main__':
         
         print(f"\nChunck number {i+1} of {number_of_chucks_testset}")
         
-        test_loader = load_dataset('test', i, device)
+        test_loader = load_dataset('test', i, device, 1)
 
-        print("\nLenght of the datasets:", len(test_loader))
-
-        grid_maps = []
-        vertices = []
-        
-        # Assuming data is a tuple of 64 elements
-        for data in test_loader:
-            print("Data structure:", type(data), len(data))
-            for idx, d in enumerate(data):
-                print(f"Element {idx} shape:", d.shape)
-
-            # Separate covariate and label data
-            covariate_data = data[0].cpu().numpy()
-            label_data = data[1].cpu().numpy()
-
-            # Stack covariate and label data separately
-            grid_maps.append(covariate_data)
-            vertices.append(label_data)
-
-            # Now covariate_data and label_data are numpy arrays containing all the elements
-            print("Covariate data shape:", covariate_data.shape)
-            print("Label data shape:", label_data.shape)
-        
-        grid_maps = np.concatenate(grid_maps, axis=0)
-        vertices = np.concatenate(vertices, axis=0)
-
-        print("Grid Maps Shape:", grid_maps.shape)
-        print("Vertices Shape:", vertices.shape)
+        print("\nLenght of the datasets:", len(test_loader))        
         
         # Make predictions
         with torch.no_grad():
             for data in test_loader:
-                inputs, _ = data
+                predictions = []
+                grid_maps = []
+                gt = []
+                inputs, target = data
                 outputs = model(inputs)
                 predictions.append(outputs)
-        predictions = torch.cat(predictions).cpu().numpy()
-        print("Predictions Shape:", predictions.shape)
+                predictions = torch.cat(predictions).cpu().numpy()
+                print("Predictions Shape:", predictions.shape)
+                
+                grid_maps = data[0].cpu().numpy()
+                gt = data[1].cpu().numpy()
 
-    # Concatenate predictions
-    #predictions = np.concatenate(predictions, axis=0)
+                # Now covariate_data and label_data are numpy arrays containing all the elements
+                print("Covariate data shape:", grid_maps.shape)
+                print("Label data shape:", gt.shape)
+
+                grid_map_recreate_BB_pred = np.full((Y_RANGE, X_RANGE), 0, dtype=float) # type: ignore
+                grid_map_recreate_BB_gt = np.full((Y_RANGE, X_RANGE), 0, dtype=float) # type: ignore
+                
+                points_BB = predictions[i].squeeze()
+                print(f"Points: {points_BB.shape}")
+                
+                for k in range(len(points_BB)):
+                    vertices = np.array(points_BB[k]) * 399
+                    vertices = vertices.astype(int)
+                    print(f"Vertices pred:\n {vertices}")
+                    height_BB = 1  # Assuming all vertices have the same height
+                    fill_polygon(grid_map_recreate_BB_pred, vertices, height_BB)
+
+                points_BB = gt[i].squeeze()
+                print(f"Points: {points_BB.shape}")
+                
+                for k in range(len(points_BB)):
+                    vertices = np.array(points_BB[k]) * 399
+                    vertices = vertices.astype(int)
+                    print(f"Vertices gt:\n {vertices}")
+                    height_BB = 1  # Assuming all vertices have the same height
+                    fill_polygon(grid_map_recreate_BB_gt, vertices, height_BB)
+
+                grid_maps = grid_maps.reshape(-1, 400, 400)
+                cgrid_map_recreate_BB_pred = grid_map_recreate_BB_pred.reshape(-1, 400, 400)
+                grid_map_recreate_BB_gt = grid_map_recreate_BB_gt.reshape(-1, 400, 400)
+
+                print("shapes:", grid_maps.shape, cgrid_map_recreate_BB_pred.shape, grid_map_recreate_BB_gt.shape)
+                
+                for i in range(len(grid_maps)):
+                    visualize_prediction(cgrid_map_recreate_BB_pred[i], grid_map_recreate_BB_gt[i], grid_maps[i])
+
 
 
     for i in range(predictions.shape[0]):
@@ -137,33 +158,14 @@ if __name__ == '__main__':
         map = grid_maps[i].squeeze()
 
         print("\nShapes:", pred.shape, gt.shape, map.shape)
-
-        grid_map_recreate_BB_pred = np.full((Y_RANGE, X_RANGE), 0, dtype=float) # type: ignore
-        grid_map_recreate_BB_gt = np.full((Y_RANGE, X_RANGE), 0, dtype=float)
-        for k in range(len(pred)):
-            vertices_pred = np.array(pred[k])
-            vertices_gt = np.array(gt[k])
-
-            print(f"Vertices prediction before mult:\n {vertices_pred}")
-            print(f"Vertices ground truth before mult:\n {vertices_gt}")
-            vertices_pred = np.array(pred[k]) * 399
-            vertices_gt = np.array(gt[k]) * 399
-
-            vertices_pred = vertices_pred.astype(int)
-            vertices_gt = vertices_gt.astype(int)
-            print(f"Vertices shapes: {vertices_pred.shape} {vertices_gt.shape}")
-            print(f"Vertices prediction:\n {vertices_pred}")
-            print(f"Vertices ground truth:\n {vertices_gt}")
-            height_BB = 1  # Assuming all vertices have the same height
-            fill_polygon(grid_map_recreate_BB_pred, vertices_pred, height_BB)
-            fill_polygon(grid_map_recreate_BB_gt, vertices_gt, height_BB)
-        
+      
         fig, ax = plt.subplots(1, 2, figsize=(10, 10))
         ax[0].imshow(map, cmap='gray', alpha=0.5)
-        ax[0].imshow(grid_map_recreate_BB_pred, cmap='jet', alpha=0.5)
+        ax[0].imshow(pred, cmap='jet', alpha=0.5)
         ax[0].set_title('Overlay of Original and Prediction Grid Maps')
 
         ax[1].imshow(map, cmap='gray', alpha=0.5)
-        ax[1].imshow(grid_map_recreate_BB_gt, cmap='jet', alpha=0.5)
+        ax[1].imshow(gt, cmap='jet', alpha=0.5)
         ax[1].set_title('Overlay of Original and Ground Truth Grid Maps')
         plt.show()
+
