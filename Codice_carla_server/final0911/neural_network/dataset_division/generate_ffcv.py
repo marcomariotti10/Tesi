@@ -8,10 +8,13 @@ from ffcv.writer import DatasetWriter
 
 class DatasetNPY(torch.utils.data.Dataset):   
     def __init__(self, name, i):
+
+        complete_name_chunck_path = os.path.join(CHUNCKS_DIR, f'{NUMBER_OF_CHUNCKS}_{NUMBER_OF_CHUNCKS_TEST}')
+
         with ThreadPoolExecutor(max_workers=2) as executor:
             self.X , self.Y = executor.map(load_array, [
-            os.path.join(CHUNCKS_DIR, f'complete_grid_maps_{name}_{i}.npy'),
-            os.path.join(CHUNCKS_DIR, f'complete_vertices_{name}_{i}.npy')
+            os.path.join(complete_name_chunck_path, f'complete_grid_maps_{name}_{i}.npy'),
+            os.path.join(complete_name_chunck_path, f'complete_vertices_{name}_{i}.npy')
         ])
 
     def __getitem__(self, idx):
@@ -26,7 +29,8 @@ def load_dataset(name, i):
     print(f"X shape dataset {name}: {x.shape}, Y shape dataset {name}: {y.shape}")
 
     new_name = f"dataset_{name}{i}.beton"  # Define the path where the dataset will be written
-    complete_path = os.path.join(FFCV_DIR, new_name)
+    ffcv_path = os.path.join(FFCV_DIR, f'{NUMBER_OF_CHUNCKS}_{NUMBER_OF_CHUNCKS_TEST}')
+    complete_path = os.path.join(ffcv_path, new_name)
 
     writer = DatasetWriter(complete_path, {
             'covariate': NDArrayField(shape=shape_X, dtype=np.dtype('float32')),  # Adjust shape
@@ -48,8 +52,10 @@ if __name__ == '__main__':
 
     shape_X = (1,400, 400)  # Shape of each sample
     shape_y = (1,MAX_NUMBER_OF_BB,4,2)
+
+    ffcv_path = os.path.join(FFCV_DIR, f'{NUMBER_OF_CHUNCKS}_{NUMBER_OF_CHUNCKS_TEST}')
     
-    os.makedirs(FFCV_DIR, exist_ok=True)
+    os.makedirs(ffcv_path, exist_ok=True)
 
     for i in range (NUMBER_OF_CHUNCKS):
 

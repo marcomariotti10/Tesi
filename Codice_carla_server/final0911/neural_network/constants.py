@@ -42,7 +42,7 @@ CONFIG_DIR = HOME_DIR + r'/config'
 
 SCALER_DIR = HOME_DIR + r'/scalers'
 
-MODEL_DIR = HOME_DIR + r'/models'
+MODEL_DIR = HOME_DIR + r'/models_yolo'
 
 CHUNCKS_DIR = HOME_DIR + r'/chuncks_yolo'    
 
@@ -78,6 +78,6 @@ HEIGHT_OFFSET = 3 # Height from where consider point in the bounding boxes
 # For Neural_network
 SEED = 42
 TEST_SIZE = 0.1
-NUMBER_OF_CHUNCKS = 1
-NUMBER_OF_CHUNCKS_TEST = 1
+NUMBER_OF_CHUNCKS = 3
+NUMBER_OF_CHUNCKS_TEST = 2
 MAX_NUMBER_OF_BB = 5
