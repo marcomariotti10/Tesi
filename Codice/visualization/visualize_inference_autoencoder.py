@@ -127,23 +127,8 @@ def evaluate(model, device):
                 inputs, targets = data
                 targets = targets.float()
                 
-                x_t = torch.full_like(targets,0, device = device)
-                #x_t = torch.randn_like(targets)
-
-                print(x_t.shape)
-
-                t = torch.randint(5, RANGE_TIMESTEPS, (batch_size,))  # Random timestep
-                noisy_target, noise = get_noisy_target(x_t,alpha_cumprod, t)
-                t_tensor = t.view(-1, 1, 1, 1).expand_as(targets)  # Reshape and expand to match targets' shape
-                # Normalize t_tensor to scale values between 0 and 1
-                t_tensor = t_tensor / (RANGE_TIMESTEPS - 1)
-                # Move t_tensor to the appropriate device (e.g., GPU or CPU)
-                t_tensor = t_tensor.to(device)
-                
                 # Predict the noise for this timestep
-                predicted_noise = model(inputs, noisy_target, t_tensor)
-
-                pred = noisy_target-predicted_noise
+                pred = model(inputs)
 
                 loss = criterion(pred,targets)
 
@@ -252,9 +237,9 @@ def show_predictions(model, device):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Train and test a neural network model.')
-    parser.add_argument('--model_type', type=str, default='BigUNet_autoencoder', help='Type of model to use')
+    parser.add_argument('--model_type', type=str, default='Autoencoder_big_big', help='Type of model to use')
     parser.add_argument('--activation_function', type=str, default='ReLU', help='Activation function to apply to the model')
-    parser.add_argument('--model_name', type=str, default='model_20250406_191824_loss_0.0033_BigUNet_autoencoder', help='Name of the model to load')
+    parser.add_argument('--model_name', type=str, default='model_20250411_082808_loss_0.0023_Autoencoder_big_big', help='Name of the model to load')
     args = parser.parse_args()
 
     model_type = globals()[args.model_type]
@@ -276,7 +261,7 @@ if __name__ == '__main__':
     model, device = model_preparation(model_name, model_type, activation_function)
 
     try:
-        #evaluate(model, device)
+        evaluate(model, device)
 
         show_predictions(model, device)
     
